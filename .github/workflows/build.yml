@@ -37,12 +37,10 @@ jobs:
               raise SystemExit(0)
 
           compat = """#ifndef MODULE_IMPORT_NS
-          #define MODULE_IMPORT_NS(ns)
-          #endif
+#define MODULE_IMPORT_NS(ns)
+#endif
 
-          """
-          compat = "\n".join(line.strip() for line in compat.splitlines()) + "\n\n"
-
+"""
           marker = "#endif /* _LINUX_MODULE_H */"
           if marker in s:
               s = s.replace(marker, compat + marker, 1)
@@ -55,6 +53,33 @@ jobs:
 
           grep -n "MODULE_IMPORT_NS" kernel/source/include/linux/module.h || true
 
+      - name: Add compiler_types.h compatibility for 4.4
+        run: |
+          if [ ! -f kernel/source/include/linux/compiler_types.h ]; then
+            cat > kernel/source/include/linux/compiler_types.h <<'EOF'
+#ifndef _LINUX_COMPILER_TYPES_H
+#define _LINUX_COMPILER_TYPES_H
+
+#include <linux/compiler.h>
+
+/* compatibility for newer code paths on old kernels */
+#ifndef __has_attribute
+#define __has_attribute(x) 0
+#endif
+
+#ifndef __has_builtin
+#define __has_builtin(x) 0
+#endif
+
+#endif /* _LINUX_COMPILER_TYPES_H */
+EOF
+            echo "created: kernel/source/include/linux/compiler_types.h"
+          else
+            echo "already exists: kernel/source/include/linux/compiler_types.h"
+          fi
+
+          ls -l kernel/source/include/linux/compiler_types.h
+
       - name: Patch AppArmor crypto.c for clang (fix VLA-in-struct)
         run: |
           python3 - <<'PY'
@@ -64,7 +89,6 @@ jobs:
           p = Path("kernel/source/security/apparmor/crypto.c")
           s = p.read_text(encoding="utf-8")
 
-          # Already patched
           if "SHASH_DESC_ON_STACK(desc, apparmor_tfm);" in s:
               print("already patched:", p)
               raise SystemExit(0)
