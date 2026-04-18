@@ -88,12 +88,15 @@ def download_patches_parallel(patch_names: list[str], temp_dir: Path) -> dict[st
     return downloaded
 
 
-def apply_patch(patch_file: Path, target_file: Path, kernel_src: Path) -> None:
-    """Apply a single Coccinelle patch."""
+def apply_patch(patch_file: Path, target_file: Path, kernel_src: Path) -> bool:
+    """Apply a single Coccinelle patch.
+    Returns True if applied, False if target file is missing and skipped.
+    """
     target_path = kernel_src / target_file
 
     if not target_path.exists():
-        raise RuntimeError(f"Target file not found: {target_path}")
+        print(f"Warning: Target file not found, skipping: {target_path}")
+        return False
 
     print(f"Applying {patch_file.name} to {target_file}")
 
@@ -104,6 +107,7 @@ def apply_patch(patch_file: Path, target_file: Path, kernel_src: Path) -> None:
             capture_output=True,
             text=True
         )
+        return True
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"Failed to apply {patch_file.name}: {e}") from e
 
@@ -121,6 +125,9 @@ def main() -> None:
     # Extract patch names
     patch_names = [p[0] for p in patches]
 
+    applied = 0
+    skipped = 0
+
     with TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
 
@@ -133,13 +140,13 @@ def main() -> None:
         for patch_name, target_file in patches:
             patch_file = downloaded[patch_name]
             try:
-                apply_patch(patch_file, Path(target_file), kernel_src)
+                ok = apply_patch(patch_file, Path(target_file), kernel_src)
+                if ok:
+                    applied += 1
+                else:
+                    skipped += 1
             except RuntimeError as e:
                 print(f"Error: {e}", file=sys.stderr)
                 sys.exit(1)
 
-    print("All patches processed successfully")
-
-
-if __name__ == "__main__":
-    main()
+    print(f"All patches processed successfully (applied={applied}, skipped={skipped})")
