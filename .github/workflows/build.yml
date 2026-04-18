@@ -24,6 +24,19 @@ jobs:
           sed -i 's/^CONFIG_CC_WERROR=y/# CONFIG_CC_WERROR is not set/' kernel/source/arch/arm64/configs/sagit_defconfig
           grep -n 'CONFIG_CC_WERROR' kernel/source/arch/arm64/configs/sagit_defconfig || true
 
+      - name: Enable Docker/LXC required configs
+        run: |
+          cat >> kernel/source/arch/arm64/configs/sagit_defconfig <<'EOF'
+          CONFIG_DEVPTS_MULTIPLE_INSTANCES=y
+          CONFIG_NF_TABLES=y
+          CONFIG_NFT_CT=y
+          CONFIG_NFT_FIB=y
+          CONFIG_NFT_FIB_IPV4=y
+          CONFIG_NFT_FIB_IPV6=y
+          CONFIG_NFT_NAT=y
+          CONFIG_NFT_MASQ=y
+          EOF
+
       - name: Patch AppArmor crypto.c for clang (fix VLA-in-struct)
         run: |
           python3 - <<'PY'
