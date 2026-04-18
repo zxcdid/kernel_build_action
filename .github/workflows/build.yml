@@ -71,7 +71,7 @@ jobs:
           ksu: true
           ksu-other: true
           ksu-url: https://github.com/SukiSU-Ultra/SukiSU-Ultra
-          ksu-version: builtin
+          ksu-version: v3.1.5
           lxc: true
           lxc-patch: true
           android-version: "12"
