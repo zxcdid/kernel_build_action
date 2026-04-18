@@ -6,6 +6,8 @@ on:
 jobs:
   Build-Kernel:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
     permissions:
       contents: read
 
@@ -18,129 +20,18 @@ jobs:
           path: kernel/source
 
       - name: Disable CC_WERROR in defconfig
-        shell: bash
         run: |
-          sed -i 's/^CONFIG_CC_WERROR=y/# CONFIG_CC_WERROR is not set/' kernel/source/arch/arm64/configs/sagit_defconfig || true
+          sed -i 's/^CONFIG_CC_WERROR=y/# CONFIG_CC_WERROR is not set/' kernel/source/arch/arm64/configs/sagit_defconfig
           grep -n 'CONFIG_CC_WERROR' kernel/source/arch/arm64/configs/sagit_defconfig || true
 
-      - name: Add MODULE_IMPORT_NS compatibility for 4.4
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          p = Path("kernel/source/include/linux/module.h")
-          s = p.read_text(encoding="utf-8")
-
-          if "MODULE_IMPORT_NS(ns)" not in s:
-              compat = "\n#ifndef MODULE_IMPORT_NS\n#define MODULE_IMPORT_NS(ns)\n#endif\n"
-              marker = "#endif /* _LINUX_MODULE_H */"
-              if marker in s:
-                  s = s.replace(marker, compat + "\n" + marker, 1)
-              else:
-                  s += compat
-              p.write_text(s, encoding="utf-8")
-              print("patched:", p)
-          else:
-              print("already exists:", p)
-          PY
-          grep -n "MODULE_IMPORT_NS" kernel/source/include/linux/module.h || true
-
-      - name: Add compiler_types.h compatibility for 4.4
-        shell: bash
-        run: |
-          FILE="kernel/source/include/linux/compiler_types.h"
-          if [ ! -f "$FILE" ]; then
-            cat > "$FILE" <<'EOF'
-          #ifndef _LINUX_COMPILER_TYPES_H
-          #define _LINUX_COMPILER_TYPES_H
-
-          #include <linux/compiler.h>
-
-          #ifndef __has_attribute
-          #define __has_attribute(x) 0
-          #endif
-
-          #ifndef __has_builtin
-          #define __has_builtin(x) 0
-          #endif
-
-          #endif /* _LINUX_COMPILER_TYPES_H */
-          EOF
-            echo "created: $FILE"
-          else
-            echo "already exists: $FILE"
-          fi
-          ls -l "$FILE"
-
-      - name: Add task_stack.h compatibility for 4.4
-        shell: bash
-        run: |
-          FILE="kernel/source/include/linux/sched/task_stack.h"
-          mkdir -p "$(dirname "$FILE")"
-          if [ ! -f "$FILE" ]; then
-            cat > "$FILE" <<'EOF'
-          #ifndef _LINUX_SCHED_TASK_STACK_H
-          #define _LINUX_SCHED_TASK_STACK_H
-
-          #include <linux/sched.h>
-
-          #ifndef task_stack_page
-          #define task_stack_page(task) ((task)->stack)
-          #endif
-
-          #endif /* _LINUX_SCHED_TASK_STACK_H */
-          EOF
-            echo "created: $FILE"
-          else
-            echo "already exists: $FILE"
-          fi
-          ls -l "$FILE"
-
-      - name: Patch KernelSU throne_tracker.c for 4.4 full_name_hash API
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-
-          p = Path("kernel/source/drivers/kernelsu/throne_tracker.c")
-          if not p.exists():
-              print("skip: file not found")
-              raise SystemExit(0)
-
-          s = p.read_text(encoding="utf-8")
-          s2 = re.sub(
-              r'full_name_hash\s*\(\s*NULL\s*,\s*([^,]+?)\s*,\s*([^)]+?)\s*\)',
-              r'full_name_hash((const unsigned char *)\1, \2)',
-              s
-          )
-
-          if s2 != s:
-              p.write_text(s2, encoding="utf-8")
-              print("patched:", p)
-          else:
-              print("no change:", p)
-          PY
-          grep -n "full_name_hash" kernel/source/drivers/kernelsu/throne_tracker.c || true
-
-      - name: Patch AppArmor crypto.c for clang (best effort)
-        shell: bash
+      - name: Patch AppArmor crypto.c for clang (fix VLA-in-struct)
         run: |
           python3 - <<'PY'
           from pathlib import Path
           import re
 
           p = Path("kernel/source/security/apparmor/crypto.c")
-          if not p.exists():
-              print("skip: file not found")
-              raise SystemExit(0)
-
           s = p.read_text(encoding="utf-8")
-
-          if "SHASH_DESC_ON_STACK(desc, apparmor_tfm);" in s:
-              print("already patched:", p)
-              raise SystemExit(0)
 
           s2 = re.sub(
               r"struct\s*\{\s*struct shash_desc shash;\s*char ctx\[crypto_shash_descsize\(apparmor_tfm\)\];\s*\}\s*desc;",
@@ -150,19 +41,20 @@ jobs:
               flags=re.S
           )
 
-          if s2 != s:
-              s2 = s2.replace("desc.shash.tfm", "desc->tfm")
-              s2 = s2.replace("desc.shash.flags", "desc->flags")
-              s2 = s2.replace("&desc.shash", "desc")
-              p.write_text(s2, encoding="utf-8")
-              print("patched:", p)
-          else:
-              print("pattern not found, skip patch")
+          if s2 == s:
+              raise SystemExit("patch failed: target block not found in crypto.c")
+
+          s2 = s2.replace("desc.shash.tfm", "desc->tfm")
+          s2 = s2.replace("desc.shash.flags", "desc->flags")
+          s2 = s2.replace("&desc.shash", "desc")
+
+          p.write_text(s2, encoding="utf-8")
+          print("patched:", p)
           PY
+
           grep -nE "SHASH_DESC_ON_STACK|desc->tfm|desc->flags|desc\\.shash" kernel/source/security/apparmor/crypto.c || true
 
       - name: Install coccinelle (for lxc-patch)
-        shell: bash
         run: |
           sudo apt-get update
           sudo apt-get install -y coccinelle
@@ -176,11 +68,8 @@ jobs:
           arch: arm64
           aosp-gcc: true
           aosp-clang: true
-          ksu: true
-          ksu-other: true
-          ksu-url: https://github.com/SukiSU-Ultra/SukiSU-Ultra
-          ksu-version: v3.1.5
-          ksu-lkm: false
+          ksu: false
+          ksu-version: main
           lxc: true
           lxc-patch: true
           android-version: "12"
