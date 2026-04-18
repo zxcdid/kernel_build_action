@@ -1,12 +1,19 @@
 name: Build Kernel
+
 on:
   workflow_dispatch:
+    inputs:
+      lxc_patch:
+        description: "Enable lxc-patch (needs coccinelle)"
+        required: true
+        type: boolean
+        default: false
 
 jobs:
   Build-Kernel:
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-    runs-on: ubuntu-latest
     permissions:
       contents: read
 
@@ -23,13 +30,16 @@ jobs:
           sed -i 's/^CONFIG_CC_WERROR=y/# CONFIG_CC_WERROR is not set/' kernel/source/arch/arm64/configs/sagit_defconfig
           grep -n 'CONFIG_CC_WERROR' kernel/source/arch/arm64/configs/sagit_defconfig || true
 
-      - name: Install coccinelle (for lxc-patch)
+      - name: Install coccinelle (only when lxc_patch=true)
+        if: ${{ inputs.lxc_patch }}
         run: |
           sudo apt-get update
           sudo apt-get install -y coccinelle
           spatch --version
 
       - name: Build Kernel
+        id: build_kernel
+        continue-on-error: true
         uses: zxcdid/kernel_build_action@main
         with:
           kernel-url: ./kernel/source/
@@ -40,9 +50,34 @@ jobs:
           ksu: false
           ksu-version: main
           lxc: true
-          lxc-patch: true
+          lxc-patch: ${{ inputs.lxc_patch }}
           android-version: "12"
           aosp-clang-version: r383902
           disable-lto: true
           anykernel3: true
           extra-make-args: '["WERROR=0","KCFLAGS=-Wno-error=vla","HOSTCFLAGS=-Wno-error=vla"]'
+
+      - name: Show real compiler error from build.log
+        if: always()
+        run: |
+          LOG="$GITHUB_WORKSPACE/kernel/source/out/build.log"
+          if [ ! -f "$LOG" ]; then
+            LOG=$(find "$GITHUB_WORKSPACE" -type f -path "*/out/build.log" | head -n1)
+          fi
+          echo "build.log: $LOG"
+          if [ -z "$LOG" ] || [ ! -f "$LOG" ]; then
+            echo "build.log not found"
+            exit 0
+          fi
+          ERR_LINE=$(grep -nE "error:|fatal error:|undefined reference" "$LOG" | head -n1 | cut -d: -f1)
+          if [ -n "$ERR_LINE" ]; then
+            START=$((ERR_LINE>60?ERR_LINE-60:1))
+            END=$((ERR_LINE+60))
+            sed -n "${START},${END}p" "$LOG"
+          else
+            tail -n 200 "$LOG"
+          fi
+
+      - name: Fail workflow if kernel build failed
+        if: steps.build_kernel.outcome == 'failure'
+        run: exit 1
