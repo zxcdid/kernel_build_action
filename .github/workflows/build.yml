@@ -12,6 +12,12 @@ jobs:
       contents: read
 
     steps:
+      - name: Install coccinelle (for lxc-patch)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y coccinelle
+          spatch --version
+          
       - name: Build Kernel
         uses: dabao1955/kernel_build_action@main
         with:
