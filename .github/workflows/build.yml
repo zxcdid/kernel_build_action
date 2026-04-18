@@ -76,4 +76,5 @@ jobs:
           aosp-clang-version: r383902
           disable-lto: true
           anykernel3: false
+          bootimg-url: https://raw.githubusercontent.com/zxcdid/kernel_build_action/refs/heads/main/boot.img
           extra-make-args: '["WERROR=0","KCFLAGS=-Wno-error=vla","HOSTCFLAGS=-Wno-error=vla"]'
