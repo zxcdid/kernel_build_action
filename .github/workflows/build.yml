@@ -35,3 +35,4 @@ jobs:
           aosp-clang-version: r383902
           disable-lto: true
           anykernel3: true
+          extra-make-args: '["WERROR=0","KCFLAGS=-Wno-error","HOSTCFLAGS=-Wno-error"]'
