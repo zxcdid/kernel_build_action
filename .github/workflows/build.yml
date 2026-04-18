@@ -19,7 +19,7 @@ jobs:
           spatch --version
           
       - name: Build Kernel
-        uses: dabao1955/kernel_build_action@main
+        uses: zxcdid/kernel_build_action@main
         with:
           kernel-url: https://github.com/LineageOS/android_kernel_xiaomi_msm8998.git
           kernel-branch: lineage-22.2
