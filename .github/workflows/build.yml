@@ -68,12 +68,15 @@ jobs:
           arch: arm64
           aosp-gcc: true
           aosp-clang: true
-          ksu: false
-          ksu-version: main
+          ksu: true
+          ksu-other: true
+          ksu-url: https://github.com/SukiSU-Ultra/SukiSU-Ultra
+          ksu-version: builtin
           lxc: true
           lxc-patch: true
           android-version: "12"
           aosp-clang-version: r383902
           disable-lto: true
           anykernel3: true
+          anykernel3-url: https://github.com/osm0sis/AnyKernel3
           extra-make-args: '["WERROR=0","KCFLAGS=-Wno-error=vla","HOSTCFLAGS=-Wno-error=vla"]'
