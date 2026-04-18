@@ -53,7 +53,7 @@ export async function packageBootimg(config: PackageConfig): Promise<void> {
 
   // Unpack boot.img
   const nohupPath = path.join(splitDir, 'nohup.out');
-  await exec.exec(magiskbootPath, ['unpack', bootimgPath], {
+  await exec.exec('./magiskboot', ['unpack', 'boot.img'], {
     cwd: splitDir,
     listeners: {
       stdout: (data: Buffer) => {
@@ -89,7 +89,7 @@ export async function packageBootimg(config: PackageConfig): Promise<void> {
   core.info(`Copied kernel: ${kernelImage} -> kernel`);
 
   // Repack boot.img
-  await exec.exec(magiskbootPath, ['repack', bootimgPath], { cwd: splitDir });
+  await exec.exec('./magiskboot', ['repack', 'boot.img'], { cwd: splitDir });
 
   // Move output to build directory
   fs.mkdirSync(config.buildDir, { recursive: true });

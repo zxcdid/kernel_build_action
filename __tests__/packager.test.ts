@@ -69,7 +69,7 @@ describe('packageBootimg', () => {
     vi.mocked(fs.appendFileSync).mockImplementation(() => undefined);
     vi.mocked(exec.exec).mockImplementation(async (cmd, args, options) => {
       // Simulate stdout and stderr callbacks for magiskboot unpack
-      if (cmd === 'split/magiskboot' && args?.[0] === 'unpack' && options?.listeners) {
+      if (cmd === './magiskboot' && args?.[0] === 'unpack' && options?.listeners) {
         options.listeners.stdout?.(Buffer.from('stdout data'));
         options.listeners.stderr?.(Buffer.from('stderr data'));
       }
