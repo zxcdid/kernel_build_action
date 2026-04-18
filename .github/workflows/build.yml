@@ -73,6 +73,30 @@ jobs:
           fi
           ls -l "$FILE"
 
+      - name: Add task_stack.h compatibility for 4.4
+        shell: bash
+        run: |
+          FILE="kernel/source/include/linux/sched/task_stack.h"
+          mkdir -p "$(dirname "$FILE")"
+          if [ ! -f "$FILE" ]; then
+            cat > "$FILE" <<'EOF'
+          #ifndef _LINUX_SCHED_TASK_STACK_H
+          #define _LINUX_SCHED_TASK_STACK_H
+
+          #include <linux/sched.h>
+
+          #ifndef task_stack_page
+          #define task_stack_page(task) ((task)->stack)
+          #endif
+
+          #endif /* _LINUX_SCHED_TASK_STACK_H */
+          EOF
+            echo "created: $FILE"
+          else
+            echo "already exists: $FILE"
+          fi
+          ls -l "$FILE"
+
       - name: Patch AppArmor crypto.c for clang (best effort)
         shell: bash
         run: |
@@ -110,7 +134,7 @@ jobs:
           PY
           grep -nE "SHASH_DESC_ON_STACK|desc->tfm|desc->flags|desc\\.shash" kernel/source/security/apparmor/crypto.c || true
 
-      - name: Install coccinelle
+      - name: Install coccinelle (for lxc-patch)
         shell: bash
         run: |
           sudo apt-get update
