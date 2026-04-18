@@ -1,0 +1,88 @@
+name: Xiaomi Mi6 LOS22.2 LXC Docker Kernel (No KSU)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-kernel:
+    name: Build Mi6 Kernel
+    runs-on: ubuntu-22.04
+    if: github.event.repository.owner.id == github.event.sender.id
+
+    steps:
+      - name: Checkout current repo
+        uses: actions/checkout@v4
+
+      - name: Checkout kernel source
+        uses: actions/checkout@v4
+        with:
+          repository: LineageOS/android_kernel_xiaomi_msm8998
+          ref: lineage-22.2
+          path: kernel/source
+          fetch-depth: 1
+
+      - name: Patch defconfig for LXC/Docker runtime
+        shell: bash
+        run: |
+          CFG="kernel/source/arch/arm64/configs/sagit_defconfig"
+          test -f "$CFG" || { echo "::error::defconfig not found: $CFG"; exit 1; }
+
+          set_y() {
+            local k="$1"
+            sed -i -E "/^${k}=.*/d;/^# ${k} is not set$/d" "$CFG"
+            echo "${k}=y" >> "$CFG"
+          }
+          set_n() {
+            local k="$1"
+            sed -i -E "/^${k}=.*/d;/^# ${k} is not set$/d" "$CFG"
+            echo "# ${k} is not set" >> "$CFG"
+          }
+
+          # LXC/Docker + Debian/PostgreSQL 关键项
+          set_y CONFIG_SYSVIPC
+          set_y CONFIG_SYSVIPC_SYSCTL
+          set_y CONFIG_POSIX_MQUEUE
+          set_y CONFIG_POSIX_MQUEUE_SYSCTL
+          set_y CONFIG_NAMESPACES
+          set_y CONFIG_UTS_NS
+          set_y CONFIG_IPC_NS
+          set_y CONFIG_USER_NS
+          set_y CONFIG_PID_NS
+          set_y CONFIG_NET_NS
+
+          # 容器网络常用限制关闭
+          set_n CONFIG_ANDROID_PARANOID_NETWORK
+
+      - name: Build kernel
+        uses: zxcdid/kernel_build_action@main
+        with:
+          kernel-url: ./kernel/source/
+          config: sagit_defconfig
+          arch: arm64
+
+          # Clang 14 (AOSP)
+          aosp-clang: true
+          aosp-gcc: true
+          android-version: 13
+          aosp-clang-version: r450784d
+
+          # 你的要求：关闭 KSU
+          ksu: false
+
+          # 开启 LXC / Docker
+          lxc: true
+          lxc-patch: true
+
+          # 打包与缓存
+          anykernel3: true
+          ccache: true
+
+          # 自动发 Release（可改 false）
+          release: true
+          access-token: ${{ secrets.GITHUB_TOKEN }}
+
+          # 老内核更稳一些
+          extra-make-args: '["KCFLAGS=-Wno-error","HOSTCFLAGS=-Wno-error"]'
