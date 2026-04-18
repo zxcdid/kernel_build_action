@@ -24,6 +24,37 @@ jobs:
           sed -i 's/^CONFIG_CC_WERROR=y/# CONFIG_CC_WERROR is not set/' kernel/source/arch/arm64/configs/sagit_defconfig
           grep -n 'CONFIG_CC_WERROR' kernel/source/arch/arm64/configs/sagit_defconfig || true
 
+      - name: Add MODULE_IMPORT_NS compatibility for 4.4
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("kernel/source/include/linux/module.h")
+          s = p.read_text(encoding="utf-8")
+
+          if "MODULE_IMPORT_NS(ns)" in s:
+              print("MODULE_IMPORT_NS already present, skip")
+              raise SystemExit(0)
+
+          compat = """#ifndef MODULE_IMPORT_NS
+          #define MODULE_IMPORT_NS(ns)
+          #endif
+
+          """
+          compat = "\n".join(line.strip() for line in compat.splitlines()) + "\n\n"
+
+          marker = "#endif /* _LINUX_MODULE_H */"
+          if marker in s:
+              s = s.replace(marker, compat + marker, 1)
+          else:
+              s += "\n" + compat
+
+          p.write_text(s, encoding="utf-8")
+          print("patched:", p)
+          PY
+
+          grep -n "MODULE_IMPORT_NS" kernel/source/include/linux/module.h || true
+
       - name: Patch AppArmor crypto.c for clang (fix VLA-in-struct)
         run: |
           python3 - <<'PY'
@@ -32,6 +63,11 @@ jobs:
 
           p = Path("kernel/source/security/apparmor/crypto.c")
           s = p.read_text(encoding="utf-8")
+
+          # Already patched
+          if "SHASH_DESC_ON_STACK(desc, apparmor_tfm);" in s:
+              print("already patched:", p)
+              raise SystemExit(0)
 
           s2 = re.sub(
               r"struct\s*\{\s*struct shash_desc shash;\s*char ctx\[crypto_shash_descsize\(apparmor_tfm\)\];\s*\}\s*desc;",
