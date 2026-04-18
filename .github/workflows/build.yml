@@ -97,6 +97,33 @@ jobs:
           fi
           ls -l "$FILE"
 
+      - name: Patch KernelSU throne_tracker.c for 4.4 full_name_hash API
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path("kernel/source/drivers/kernelsu/throne_tracker.c")
+          if not p.exists():
+              print("skip: file not found")
+              raise SystemExit(0)
+
+          s = p.read_text(encoding="utf-8")
+          s2 = re.sub(
+              r'full_name_hash\s*\(\s*NULL\s*,\s*([^,]+?)\s*,\s*([^)]+?)\s*\)',
+              r'full_name_hash((const unsigned char *)\1, \2)',
+              s
+          )
+
+          if s2 != s:
+              p.write_text(s2, encoding="utf-8")
+              print("patched:", p)
+          else:
+              print("no change:", p)
+          PY
+          grep -n "full_name_hash" kernel/source/drivers/kernelsu/throne_tracker.c || true
+
       - name: Patch AppArmor crypto.c for clang (best effort)
         shell: bash
         run: |
