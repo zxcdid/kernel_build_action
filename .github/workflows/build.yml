@@ -1,4 +1,3 @@
-# A simple action usage
 name: Build Kernel
 on:
   workflow_dispatch:
@@ -12,17 +11,28 @@ jobs:
       contents: read
 
     steps:
+      - name: Checkout kernel source
+        uses: actions/checkout@v4
+        with:
+          repository: LineageOS/android_kernel_xiaomi_msm8998
+          ref: lineage-22.2
+          path: kernel/source
+
+      - name: Disable CC_WERROR in defconfig
+        run: |
+          sed -i 's/^CONFIG_CC_WERROR=y/# CONFIG_CC_WERROR is not set/' kernel/source/arch/arm64/configs/sagit_defconfig
+          grep -n 'CONFIG_CC_WERROR' kernel/source/arch/arm64/configs/sagit_defconfig || true
+
       - name: Install coccinelle (for lxc-patch)
         run: |
           sudo apt-get update
           sudo apt-get install -y coccinelle
           spatch --version
-          
+
       - name: Build Kernel
         uses: zxcdid/kernel_build_action@main
         with:
-          kernel-url: https://github.com/LineageOS/android_kernel_xiaomi_msm8998.git
-          kernel-branch: lineage-22.2
+          kernel-url: ./kernel/source/
           config: sagit_defconfig
           arch: arm64
           aosp-gcc: true
@@ -31,8 +41,8 @@ jobs:
           ksu-version: main
           lxc: true
           lxc-patch: true
-          android-version: 12
+          android-version: "12"
           aosp-clang-version: r383902
           disable-lto: true
           anykernel3: true
-          extra-make-args: '["WERROR=0","KCFLAGS=-Wno-error","HOSTCFLAGS=-Wno-error"]'
+          extra-make-args: '["WERROR=0","KCFLAGS=-Wno-error=vla","HOSTCFLAGS=-Wno-error=vla"]'
